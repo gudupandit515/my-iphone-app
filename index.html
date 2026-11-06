@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<title>Gudu’s Tube</title>
+<style>
+:root{--bg:#fff;--bg2:#f0f0f0;--ink:#0f0f0f;--mute:#606060;--line:#e2e2e2;--accent:#e0261b}
+@media (prefers-color-scheme:dark){:root{--bg:#0f0f0f;--bg2:#272727;--ink:#f1f1f1;--mute:#a8a8a8;--line:#303030;--accent:#ff4e45}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button{font:inherit;cursor:pointer;border:0;border-radius:18px;padding:8px 14px;background:var(--bg2);color:var(--ink)}
+button.on{background:var(--ink);color:var(--bg)}
+button:focus-visible,input:focus-visible,.vid:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.top{position:sticky;top:0;z-index:10;background:var(--bg);display:flex;align-items:center;gap:10px;padding:10px 16px;flex-wrap:wrap;border-bottom:1px solid var(--line)}
+.logo{font-weight:700;font-size:20px;letter-spacing:-.03em}.logo span{color:var(--accent)}
+#f{flex:1;display:flex;min-width:200px;max-width:600px;margin:0 auto}
+#f input{flex:1;min-width:0;padding:9px 14px;border:1px solid var(--line);border-radius:20px 0 0 20px;background:var(--bg);color:var(--ink);font:inherit}
+#f button{border-radius:0 20px 20px 0;border:1px solid var(--line);border-left:0}
+nav{display:flex;gap:6px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;scrollbar-width:none}
+.chips button{white-space:nowrap}
+.feed{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:28px 16px;padding:8px 16px 24px}
+.feed.shorts{grid-template-columns:repeat(auto-fill,minmax(190px,1fr))}
+.vid{cursor:pointer;min-width:0}
+.thumb{position:relative;aspect-ratio:16/9;border-radius:12px;overflow:hidden;background:var(--bg2)}
+.feed.shorts .thumb{aspect-ratio:9/16}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.dur{position:absolute;right:6px;bottom:6px;background:rgba(0,0,0,.8);color:#fff;font-size:12px;padding:1px 5px;border-radius:4px}
+.meta{display:flex;gap:8px;margin-top:8px}
+.meta h4{margin:0;font-size:15px;font-weight:600;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.meta p{margin:2px 0 0;color:var(--mute);font-size:13px}
+.meta>div{flex:1;min-width:0}
+.save{background:transparent;padding:2px 6px;font-size:18px;color:var(--mute);align-self:flex-start}
+.save.on{color:var(--accent);background:transparent}
+.msg{text-align:center;color:var(--mute);padding:24px 16px}
+#watch{padding:16px;max-width:1000px;margin:0 auto}
+.frame{position:relative;aspect-ratio:16/9;background:#000;border-radius:12px;overflow:hidden}
+.frame.short{aspect-ratio:9/16;max-width:360px;margin:0 auto;max-height:78vh}
+.frame>*{position:absolute;inset:0;width:100%;height:100%}
+#watch h2{font-size:19px;margin:12px 0 6px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--mute)}
+.row span{flex:1}
+#wd{white-space:pre-wrap;color:var(--mute);font-size:14px;max-height:140px;overflow:auto;background:var(--bg2);padding:10px;border-radius:10px}
+[hidden]{display:none!important}
+@media (max-width:640px){.feed{padding:8px 0 24px;gap:22px}.thumb{border-radius:0}.feed .meta{padding:0 12px}.feed.shorts{grid-template-columns:repeat(2,1fr);gap:12px 4px;padding:8px 4px}.feed.shorts .thumb{border-radius:10px}#watch{padding:0 0 12px}.frame{border-radius:0}#watch>:not(.frame){margin-left:12px;margin-right:12px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="logo">Gudu’s <span>Tube</span></div>
+  <form id="f"><input id="q" placeholder="Search karo ya YouTube link paste karo" aria-label="Search"><button>Search</button></form>
+  <nav>
+    <button data-v="home" class="on">Home</button>
+    <button data-v="saved">Saved</button>
+    <button data-v="history">History</button>
+  </nav>
+</header>
+
+<section id="watch" hidden>
+  <div class="frame" id="frame"><div id="player"></div></div>
+  <h2 id="wt"></h2>
+  <div class="row"><span id="wc"></span><button id="ws"></button><button id="wx">Band karo</button></div>
+  <p id="wd"></p>
+</section>
+
+<div class="chips" id="chips"></div>
+<main class="feed" id="feed"></main>
+<div class="msg" id="msg"></div>
+<div id="sentinel" style="height:1px"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+let favs = store.get('gt_favs', []), hist = store.get('gt_hist', []);
+let view = 'home', chip = 'All', q = '', st = null, cur = [], seen = new Set(), now = null;
+let yt = null, ready = false, pending = null;
+
+const CHIPS = [['All'],['Shorts'],['Music','10'],['Gaming','20'],['Comedy','23'],['News','25'],['Sports','17'],['Science & Tech','28'],['Education','27'],['Bollywood songs',null,'bollywood songs'],['Cricket',null,'cricket highlights'],['Cooking',null,'indian recipes']];
+
+/* ---------- helpers ---------- */
+const decode = s => { const t = document.createElement('textarea'); t.innerHTML = s; return t.value; };
+function dur(iso){
+  const m = (iso || '').match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/); if (!m) return '';
+  const h = +m[1] || 0, mi = +m[2] || 0, s = +m[3] || 0, p = n => String(n).padStart(2, '0');
+  return h ? h + ':' + p(mi) + ':' + p(s) : mi + ':' + p(s);
+}
+function views(n){
+  n = +n; if (!n) return '';
+  if (n >= 1e7) return (n / 1e7).toFixed(1) + ' Cr views';
+  if (n >= 1e5) return (n / 1e5).toFixed(1) + ' L views';
+  if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K views';
+  return n + ' views';
+}
+const isFav = id => favs.some(v => v.id === id);
+function mapVideo(i){
+  const t = i.snippet.thumbnails;
+  return {
+    id: i.id, title: decode(i.snippet.title), channel: decode(i.snippet.channelTitle),
+    thumb: (t.high || t.medium || t.default).url,
+    desc: (i.snippet.description || '').slice(0, 400),
+    views: i.statistics && i.statistics.viewCount,
+    duration: i.contentDetails && dur(i.contentDetails.duration),
+    isShort: !!i.isShort
+  };
+}
+async function api(endpoint, params){
+  const r = await fetch('/api/yt?' + new URLSearchParams({ endpoint, ...params }));
+  const d = await r.json();
+  if (d.error) throw new Error(d.error.message || 'API error');
+  return d;
+}
+
+/* ---------- data ---------- */
+async function fetchPage(s){
+  const part = 'snippet,contentDetails,statistics';
+  if (s.kind === 'trend'){
+    const p = { part, chart: 'mostPopular', regionCode: 'IN', maxResults: 24 };
+    if (s.cat) p.videoCategoryId = s.cat;
+    if (s.token) p.pageToken = s.token;
+    const d = await api('videos', p);
+    s.token = d.nextPageToken || ''; if (!s.token) s.done = true;
+    return d.items.map(mapVideo);
+  }
+  const p = { part: 'snippet', type: 'video', maxResults: 30, q: s.q, regionCode: 'IN' };
+  if (s.short) p.videoDuration = 'short';
+  if (s.token) p.pageToken = s.token;
+  const d = await api('search', p);
+  s.token = d.nextPageToken || ''; if (!s.token) s.done = true;
+  const ids = d.items.map(i => i.id && i.id.videoId).filter(Boolean);
+  if (!ids.length) return [];
+  const v = await api('videos', { part, id: ids.join(',') });
+  return v.items.map(mapVideo);
+}
+
+async function loadMore(){
+  if (!st || st.busy || st.done) return;
+  const my = st; my.busy = true;
+  $('#msg').textContent = 'Load ho raha hai…';
+  try {
+    let added = [], tries = 0;
+    while (!added.length && !my.done && tries++ < 4){
+      const items = await fetchPage(my);
+      if (my !== st) return;
+      added = items.filter(v => !seen.has(v.id) && (my.filter === 'all' || (my.filter === 'shorts') === v.isShort));
+    }
+    added.forEach(v => { seen.add(v.id); cur.push(v); $('#feed').appendChild(card(v)); });
+    $('#msg').textContent = cur.length ? '' : 'Kuch nahi mila.';
+  } catch(e){
+    if (my === st) $('#msg').textContent = 'Error: ' + e.message;
+  } finally { my.busy = false; }
+}
+new IntersectionObserver(es => { if (es[0].isIntersecting) loadMore(); }, { rootMargin: '600px' }).observe($('#sentinel'));
+
+/* ---------- UI ---------- */
+function card(v){
+  const c = document.createElement('div'); c.className = 'vid'; c.tabIndex = 0;
+  const th = document.createElement('div'); th.className = 'thumb';
+  const img = document.createElement('img'); img.src = v.thumb; img.alt = ''; img.loading = 'lazy'; th.appendChild(img);
+  if (v.duration){ const d = document.createElement('span'); d.className = 'dur'; d.textContent = v.duration; th.appendChild(d); }
+  const meta = document.createElement('div'); meta.className = 'meta';
+  const box = document.createElement('div');
+  const h = document.createElement('h4'); h.textContent = v.title;
+  const p = document.createElement('p'); p.textContent = [v.channel, views(v.views)].filter(Boolean).join(' • ');
+  box.append(h, p);
+  const sv = document.createElement('button'); sv.className = 'save' + (isFav(v.id) ? ' on' : '');
+  sv.textContent = isFav(v.id) ? '★' : '☆'; sv.setAttribute('aria-label', 'Save');
+  sv.onclick = e => { e.stopPropagation(); toggleFav(v); sv.className = 'save' + (isFav(v.id) ? ' on' : ''); sv.textContent = isFav(v.id) ? '★' : '☆'; };
+  meta.append(box, sv); c.append(th, meta);
+  c.onclick = () => play(v);
+  c.onkeydown = e => { if (e.key === 'Enter') play(v); };
+  return c;
+}
+function toggleFav(v){
+  favs = isFav(v.id) ? favs.filter(x => x.id !== v.id) : [v, ...favs];
+  store.set('gt_favs', favs); updateSave();
+  if (view === 'saved') start();
+}
+function updateSave(){ if (now) $('#ws').textContent = isFav(now.id) ? '★ Saved' : '☆ Save'; }
+
+function renderChips(){
+  const box = $('#chips'); box.textContent = '';
+  CHIPS.forEach(([name]) => {
+    const b = document.createElement('button'); b.textContent = name; if (name === chip) b.className = 'on';
+    b.onclick = () => { chip = name; q = ''; $('#q').value = ''; renderChips(); start(); };
+    box.appendChild(b);
+  });
+}
+
+function start(){
+  $('#chips').hidden = !(view === 'home' && !q);
+  $('#feed').textContent = ''; $('#msg').textContent = ''; seen = new Set(); cur = []; st = null;
+  $('#feed').classList.remove('shorts');
+  if (view === 'saved' || view === 'history'){
+    cur = view === 'saved' ? favs : hist;
+    cur.forEach(v => $('#feed').appendChild(card(v)));
+    $('#msg').textContent = cur.length ? '' : (view === 'saved' ? 'Koi saved video nahi. Kisi video par ☆ dabao.' : 'History khaali hai.');
+    return;
+  }
+  const c = CHIPS.find(x => x[0] === chip) || CHIPS[0];
+  if (q) st = { kind: 'search', q, filter: 'all' };
+  else if (chip === 'Shorts') st = { kind: 'search', q: '#shorts', short: true, filter: 'shorts' };
+  else if (c[2]) st = { kind: 'search', q: c[2], filter: 'normal' };
+  else st = { kind: 'trend', cat: c[1] || '', filter: 'normal' };
+  $('#feed').classList.toggle('shorts', st.filter === 'shorts');
+  loadMore();
+}
+
+/* ---------- player (official YouTube IFrame API) ---------- */
+const sc = document.createElement('script'); sc.src = 'https://www.youtube.com/iframe_api'; document.head.appendChild(sc);
+window.onYouTubeIframeAPIReady = () => {
+  yt = new YT.Player('player', {
+    width: '100%', height: '100%', playerVars: { playsinline: 1, rel: 0 },
+    events: {
+      onReady: () => { ready = true; if (pending){ yt.loadVideoById(pending); pending = null; } },
+      onStateChange: e => { if (e.data === 0) next(); }
+    }
+  });
+};
+function play(v){
+  now = v;
+  hist = [v, ...hist.filter(x => x.id !== v.id)].slice(0, 50); store.set('gt_hist', hist);
+  $('#watch').hidden = false;
+  $('#frame').classList.toggle('short', !!v.isShort);
+  $('#wt').textContent = v.title;
+  $('#wc').textContent = [v.channel, views(v.views)].filter(Boolean).join(' • ');
+  $('#wd').textContent = v.desc || ''; $('#wd').hidden = !v.desc;
+  updateSave();
+  if (ready) yt.loadVideoById(v.id); else pending = v.id;
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+function next(){
+  if (!cur.length) return;
+  const i = cur.findIndex(v => v.id === (now && now.id));
+  if (i >= 0 && i < cur.length - 1) play(cur[i + 1]);
+}
+$('#ws').onclick = () => now && toggleFav(now);
+$('#wx').onclick = () => { $('#watch').hidden = true; if (ready) yt.stopVideo(); };
+
+/* ---------- events ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  view = b.dataset.v;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  q = ''; $('#q').value = ''; start();
+});
+$('#f').addEventListener('submit', e => {
+  e.preventDefault();
+  const t = $('#q').value.trim(); if (!t) return;
+  const m = t.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/) || t.match(/^([\w-]{11})$/);
+  if (m) return play({ id: m[1], title: 'YouTube video', channel: '', thumb: 'https://i.ytimg.com/vi/' + m[1] + '/hqdefault.jpg', desc: '', isShort: /shorts\//.test(t) });
+  view = 'home'; q = t;
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x.dataset.v === 'home'));
+  start();
+});
+
+renderChips(); start();
+</script>
+</body>
+</html>
